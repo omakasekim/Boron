@@ -1,4 +1,4 @@
-package dev.aetherx86.boron.processor
+package dev.omakasekim.boron.processor
 
 import com.tschuchort.compiletesting.KotlinCompilation
 import com.tschuchort.compiletesting.SourceFile
@@ -26,7 +26,7 @@ class DifferentialTest {
             sources = listOf(
                 SourceFile.kotlin(
                     "Input.kt",
-                    "@file:OptIn(ExperimentalUnsignedTypes::class)\npackage test\nimport dev.aetherx86.boron.*\n$source",
+                    "@file:OptIn(ExperimentalUnsignedTypes::class)\npackage test\nimport dev.omakasekim.boron.*\n$source",
                 ),
             )
             inheritClassPath = true

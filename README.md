@@ -39,12 +39,12 @@ plugins {
 }
 
 dependencies {
-    implementation("dev.aetherx86.boron:boron-annotations:0.2.0")
-    ksp("dev.aetherx86.boron:boron-processor:0.2.0")
+    implementation("dev.omakasekim.boron:boron-annotations:0.2.0")
+    ksp("dev.omakasekim.boron:boron-processor:0.2.0")
 }
 ```
 
-Both artifacts are published to GitHub Packages, at `https://maven.pkg.github.com/Aetherx86/Boron`.
+Both artifacts are published to GitHub Packages, at `https://maven.pkg.github.com/omakasekim/Boron`.
 
 ## What gets generated
 
@@ -180,8 +180,8 @@ expansion or unsigned array equality) makes it fail.
 
 ```sh
 ./gradlew --no-daemon build
-./gradlew --no-daemon :processor:test --tests 'dev.aetherx86.boron.processor.DifferentialTest'
-./gradlew --no-daemon :sample:test --tests 'dev.aetherx86.boron.sample.TypesAndNestingTest'
+./gradlew --no-daemon :processor:test --tests 'dev.omakasekim.boron.processor.DifferentialTest'
+./gradlew --no-daemon :sample:test --tests 'dev.omakasekim.boron.sample.TypesAndNestingTest'
 ```
 
 ## Versioning

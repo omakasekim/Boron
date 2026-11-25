@@ -1,4 +1,4 @@
-package dev.aetherx86.boron.sample
+package dev.omakasekim.boron.sample
 
 import java.lang.management.ManagementFactory
 import java.util.Random

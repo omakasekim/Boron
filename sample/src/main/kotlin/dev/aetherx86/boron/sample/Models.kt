@@ -1,9 +1,9 @@
-package dev.aetherx86.boron.sample
+package dev.omakasekim.boron.sample
 
-import dev.aetherx86.boron.Bitpack
-import dev.aetherx86.boron.Bits
-import dev.aetherx86.boron.DiffIgnore
-import dev.aetherx86.boron.FastDiff
+import dev.omakasekim.boron.Bitpack
+import dev.omakasekim.boron.Bits
+import dev.omakasekim.boron.DiffIgnore
+import dev.omakasekim.boron.FastDiff
 
 @FastDiff
 data class AccountState(

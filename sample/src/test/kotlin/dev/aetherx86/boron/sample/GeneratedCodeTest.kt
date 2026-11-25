@@ -1,4 +1,4 @@
-package dev.aetherx86.boron.sample
+package dev.omakasekim.boron.sample
 
 import java.lang.management.ManagementFactory
 import java.util.Random
@@ -324,8 +324,8 @@ class GeneratedCodeTest {
     @Test
     fun generatedCodeUsesNoReflection() {
         val classes = listOf(
-            Class.forName("dev.aetherx86.boron.sample.AccountStateDiffKt"),
-            Class.forName("dev.aetherx86.boron.sample.PackedParticle"),
+            Class.forName("dev.omakasekim.boron.sample.AccountStateDiffKt"),
+            Class.forName("dev.omakasekim.boron.sample.PackedParticle"),
         )
         for (type in classes) {
             val resource = type.name.replace('.', '/') + ".class"

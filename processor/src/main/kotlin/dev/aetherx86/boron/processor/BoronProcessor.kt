@@ -1,4 +1,4 @@
-package dev.aetherx86.boron.processor
+package dev.omakasekim.boron.processor
 
 import com.google.devtools.ksp.getDeclaredProperties
 import com.google.devtools.ksp.getVisibility
@@ -44,10 +44,10 @@ import com.squareup.kotlinpoet.ksp.toTypeParameterResolver
 import com.squareup.kotlinpoet.ksp.toTypeVariableName
 import com.squareup.kotlinpoet.ksp.writeTo
 
-private const val FAST_DIFF = "dev.aetherx86.boron.FastDiff"
-private const val BITPACK = "dev.aetherx86.boron.Bitpack"
-private const val BITS = "dev.aetherx86.boron.Bits"
-private const val DIFF_IGNORE = "dev.aetherx86.boron.DiffIgnore"
+private const val FAST_DIFF = "dev.omakasekim.boron.FastDiff"
+private const val BITPACK = "dev.omakasekim.boron.Bitpack"
+private const val BITS = "dev.omakasekim.boron.Bits"
+private const val DIFF_IGNORE = "dev.omakasekim.boron.DiffIgnore"
 
 class BoronProcessorProvider : SymbolProcessorProvider {
     override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor =

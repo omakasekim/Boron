@@ -4,7 +4,7 @@ plugins {
 }
 
 allprojects {
-    group = "dev.aetherx86.boron"
+    group = "dev.omakasekim.boron"
     version = "0.2.0"
     repositories { mavenCentral() }
 }

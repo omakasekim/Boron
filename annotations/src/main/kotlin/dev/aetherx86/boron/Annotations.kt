@@ -1,4 +1,4 @@
-package dev.aetherx86.boron
+package dev.omakasekim.boron
 
 /**
  * Generates a comparison that reports which properties of two instances differ, as a bit mask.

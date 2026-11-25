@@ -1,4 +1,4 @@
-package dev.aetherx86.boron.processor
+package dev.omakasekim.boron.processor
 
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
@@ -23,7 +23,7 @@ class ProcessorTest {
         sources = listOf(
             SourceFile.kotlin(
                 "Input.kt",
-                "package test\nimport dev.aetherx86.boron.*\n$source",
+                "package test\nimport dev.omakasekim.boron.*\n$source",
             ),
         )
         inheritClassPath = true
