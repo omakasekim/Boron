@@ -20,6 +20,7 @@ import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Visibility
 import com.google.devtools.ksp.validate
 import com.squareup.kotlinpoet.AnnotationSpec
+import com.squareup.kotlinpoet.BOOLEAN
 import com.squareup.kotlinpoet.CHAR
 import com.squareup.kotlinpoet.ClassName
 import com.squareup.kotlinpoet.CodeBlock
@@ -31,11 +32,13 @@ import com.squareup.kotlinpoet.INT
 import com.squareup.kotlinpoet.KModifier
 import com.squareup.kotlinpoet.LIST
 import com.squareup.kotlinpoet.LONG
+import com.squareup.kotlinpoet.LambdaTypeName
 import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
 import com.squareup.kotlinpoet.PropertySpec
 import com.squareup.kotlinpoet.STRING
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeSpec
+import com.squareup.kotlinpoet.UNIT
 import com.squareup.kotlinpoet.joinToCode
 import com.squareup.kotlinpoet.ksp.addOriginatingKSFile
 import com.squareup.kotlinpoet.ksp.toClassName
@@ -69,7 +72,7 @@ class BoronProcessor(
         val deferred = ArrayList<KSAnnotated>()
         val run = { name: String, generate: (KSClassDeclaration) -> Unit ->
             for (symbol in resolver.getSymbolsWithAnnotation(name)) {
-                if (!symbol.validate(enableNewFeatures = true)) {
+                if (!symbol.validate(apiFeatures = apiFeatures)) {
                     deferred.add(symbol)
                     continue
                 }
@@ -240,6 +243,59 @@ class BoronProcessor(
                 .build(),
         )
         constants.addFunction(
+            FunSpec.builder("count")
+                .addKdoc("The number of differing properties set in [mask], without allocating.\n")
+                .addParameter("mask", maskType)
+                .returns(INT)
+                .addStatement("return·(mask·and·ALL).countOneBits()")
+                .build(),
+        )
+        constants.addFunction(
+            FunSpec.builder("has")
+                .addKdoc("Returns true when [flag] is set in [mask].\n")
+                .addParameter("mask", maskType)
+                .addParameter("flag", maskType)
+                .returns(BOOLEAN)
+                .addStatement("return·(mask·and·flag)·!=·%L", zero)
+                .build(),
+        )
+        constants.addFunction(
+            FunSpec.builder("hasAny")
+                .addKdoc("Returns true when any bit in [flags] is set in [mask].\n")
+                .addParameter("mask", maskType)
+                .addParameter("flags", maskType)
+                .returns(BOOLEAN)
+                .addStatement("return·(mask·and·flags)·!=·%L", zero)
+                .build(),
+        )
+        constants.addFunction(
+            FunSpec.builder("hasAll")
+                .addKdoc("Returns true when every bit in [flags] is set in [mask].\n")
+                .addParameter("mask", maskType)
+                .addParameter("flags", maskType)
+                .returns(BOOLEAN)
+                .addStatement("return·(mask·and·flags)·==·flags")
+                .build(),
+        )
+        constants.addFunction(
+            FunSpec.builder("forEach")
+                .addModifiers(KModifier.INLINE)
+                .addKdoc("Invokes [action] with the name of each property set in [mask], without allocating.\n")
+                .addParameter("mask", maskType)
+                .addParameter("action", LambdaTypeName.get(parameters = arrayOf(STRING), returnType = UNIT))
+                .addCode(
+                    CodeBlock.builder().apply {
+                        for ((i, property) in properties.withIndex()) {
+                            add(
+                                "if·(mask·and·(%L·shl·%L)·!=·%L)·action(%S)\n",
+                                one, i, zero, property.simpleName.asString(),
+                            )
+                        }
+                    }.build(),
+                )
+                .build(),
+        )
+        constants.addFunction(
             FunSpec.builder("names")
                 .addKdoc("The names of the properties set in [mask]. Allocates, so it is meant for logging.\n")
                 .addParameter("mask", maskType)
@@ -289,9 +345,21 @@ class BoronProcessor(
         }
         diff.addStatement("return mask")
 
+        val changed = FunSpec.builder("changed")
+            .addModifiers(visibility)
+            .addTypeVariables(typeVariables)
+            .receiver(selfType)
+            .addParameter("other", selfType)
+            .returns(BOOLEAN)
+            .addKdoc("Returns true when any tracked property differs from [other], without allocating.\n")
+            .addStatement("return·this.diffMask(other)·!=·%L", zero)
+        optIn?.let { changed.addAnnotation(it) }
+        file?.let { changed.addOriginatingKSFile(it) }
+
         val output = FileSpec.builder(packageName, "${flat}Diff")
             .addType(constants.build())
             .addFunction(diff.build())
+            .addFunction(changed.build())
 
         if (Modifier.DATA in declaration.modifiers) {
             val constructorParameters = declaration.primaryConstructor?.parameters
@@ -402,6 +470,8 @@ class BoronProcessor(
         val offset: Int,
         /** A nullable enum stores null as 0 and each entry as its ordinal plus one. */
         val nullable: Boolean,
+        /** For [Kind.ENUM], the number of enum entries declared on the enum class. */
+        val enumEntries: Int,
         /** For [Kind.NESTED], the generated value class of the nested type. */
         val packedType: ClassName?,
         /** For [Kind.NESTED], whether the nested type's generated code is internal. */
@@ -600,6 +670,7 @@ class BoronProcessor(
                     signed = signed,
                     offset = offset,
                     nullable = nullable,
+                    enumEntries = enumEntries,
                     packedType = packedType,
                     nestedInternal = nestedInternal,
                     node = parameter,
@@ -825,6 +896,90 @@ class BoronProcessor(
             )
         type.addFunction(unpack.build())
 
+        val packMaskType = if (fields.size <= 32) INT else LONG
+        val packOne = if (packMaskType == INT) "1" else "1L"
+        val packZero = if (packMaskType == INT) "0" else "0L"
+        val packedDiff = FunSpec.builder("diffMask")
+            .addParameter("other", packed)
+            .returns(packMaskType)
+            .addKdoc("Returns a bitmask with bit `i` set for each packed field that differs from [other], without unpacking.\n")
+            .addStatement("val·delta·=·this.raw·xor·other.raw")
+            .addStatement("if·(delta·==·0L)·return·%L", packZero)
+            .addStatement("var·mask·=·%L", packZero)
+        for ((i, field) in fields.withIndex()) {
+            packedDiff.beginControlFlow("if·(((delta·ushr·%L)·and·%L)·!=·0L)", field.offset, field.mask)
+            packedDiff.addStatement("mask·=·mask·or·(%L·shl·%L)", packOne, i)
+            packedDiff.endControlFlow()
+        }
+        packedDiff.addStatement("return·mask")
+        type.addFunction(packedDiff.build())
+
+        val totalBits = fields.last().offset + fields.last().bits
+        val companion = TypeSpec.companionObjectBuilder()
+            .addProperty(
+                PropertySpec.builder("BITS", INT)
+                    .addModifiers(KModifier.CONST)
+                    .addKdoc("The number of bits [%T] actually uses.\n", packed)
+                    .initializer("%L", totalBits)
+                    .build(),
+            )
+        val isValid = FunSpec.builder("isValid")
+            .addParameter("raw", LONG)
+            .returns(BOOLEAN)
+            .addKdoc("Returns true when [raw] has no stray high bits and every enum and nested field is in range.\n")
+        if (totalBits < 64) {
+            isValid.addStatement("if·((raw·ushr·%L)·!=·0L)·return·false", totalBits)
+        }
+        for (field in fields) {
+            when (field.kind) {
+                Kind.ENUM -> {
+                    val limit = if (field.nullable) field.enumEntries.toLong() + 1L else field.enumEntries.toLong()
+                    isValid.addStatement(
+                        "if·(((raw·ushr·%L)·and·%L)·>=·%LL)·return·false",
+                        field.offset,
+                        field.mask,
+                        limit,
+                    )
+                }
+                Kind.NESTED -> {
+                    val inner = field.packedType!!
+                    isValid.addStatement(
+                        "if·(!%T.isValid((raw·ushr·%L)·and·%L))·return·false",
+                        inner,
+                        field.offset,
+                        field.mask,
+                    )
+                }
+                else -> {}
+            }
+        }
+        isValid.addStatement("return·true")
+        companion.addFunction(isValid.build())
+        companion.addFunction(
+            FunSpec.builder("fromRawOrNull")
+                .addParameter("raw", LONG)
+                .returns(packed.copy(nullable = true))
+                .addKdoc("Wraps [raw] as a [%T] if [isValid] accepts it, or returns null.\n", packed)
+                .addStatement("return·if·(isValid(raw))·%T(raw)·else·null", packed)
+                .build(),
+        )
+        companion.addFunction(
+            FunSpec.builder("fromRaw")
+                .addParameter("raw", LONG)
+                .returns(packed)
+                .addKdoc("Wraps [raw] as a [%T], throwing if [isValid] rejects it.\n", packed)
+                .beginControlFlow("if·(!isValid(raw))")
+                .addStatement(
+                    "throw·%T(%P)",
+                    ClassName("kotlin", "IllegalArgumentException"),
+                    "raw value \$raw is not a valid $packedName",
+                )
+                .endControlFlow()
+                .addStatement("return·%T(raw)", packed)
+                .build(),
+        )
+        type.addType(companion.build())
+
         val pack = FunSpec.builder("pack")
             .addModifiers(visibility)
             .receiver(className)
@@ -841,7 +996,6 @@ class BoronProcessor(
         }.joinToCode("·or·")
         pack.addStatement("return·%T(%L)", packed, parts)
 
-        val totalBits = fields.last().offset + fields.last().bits
         val widthConstant = PropertySpec.builder("${packedName}_BITS", INT)
             .addModifiers(visibility, KModifier.CONST)
             .addKdoc("The number of bits [%T] actually uses.\n", packed)

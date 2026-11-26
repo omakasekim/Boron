@@ -322,6 +322,118 @@ class GeneratedCodeTest {
     }
 
     @Test
+    fun diffMaskHelpersWorkWithoutAllocation() {
+        val other = AccountState(9, 100, "z")
+        val mask = base.diffMask(other)
+        assertFalse(base.changed(base.copy()))
+        assertTrue(base.changed(other))
+        assertEquals(2, AccountStateDiff.count(mask))
+        assertEquals(0, AccountStateDiff.count(0))
+        assertTrue(AccountStateDiff.has(mask, AccountStateDiff.NONCE))
+        assertFalse(AccountStateDiff.has(mask, AccountStateDiff.BALANCE))
+        assertTrue(AccountStateDiff.hasAny(mask, AccountStateDiff.BALANCE or AccountStateDiff.CODE_HASH))
+        assertFalse(AccountStateDiff.hasAll(mask, AccountStateDiff.BALANCE or AccountStateDiff.CODE_HASH))
+        assertTrue(AccountStateDiff.hasAll(mask, AccountStateDiff.NONCE or AccountStateDiff.CODE_HASH))
+
+        val visited = ArrayList<String>()
+        AccountStateDiff.forEach(mask) { visited.add(it) }
+        assertEquals(listOf("nonce", "codeHash"), visited)
+
+        // Wide (>32 properties) uses Long masks for count/has/forEach/changed as well.
+        val wide = Wide(
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        )
+        val wideChanged = wide.copy(p00 = 1, p32 = 2)
+        val wideMask = wide.diffMask(wideChanged)
+        assertTrue(wide.changed(wideChanged))
+        assertEquals(2, WideDiff.count(wideMask))
+        assertTrue(WideDiff.hasAll(wideMask, WideDiff.P00 or WideDiff.P32))
+        val wideVisited = ArrayList<String>()
+        WideDiff.forEach(wideMask) { wideVisited.add(it) }
+        assertEquals(listOf("p00", "p32"), wideVisited)
+
+        // Zero-allocation check for inline forEach + changed + count.
+        val bean = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+        val id = Thread.currentThread().threadId()
+        var sink = 0
+        repeat(20_000) {
+            if (base.changed(other)) {
+                sink += AccountStateDiff.count(mask)
+                AccountStateDiff.forEach(mask) { sink += it.length }
+            }
+        }
+        val before = bean.getThreadAllocatedBytes(id)
+        repeat(500_000) {
+            if (base.changed(other)) {
+                sink += AccountStateDiff.count(mask)
+                AccountStateDiff.forEach(mask) { sink += it.length }
+            }
+        }
+        val allocated = bean.getThreadAllocatedBytes(id) - before
+        assertTrue(allocated < 4096, "allocated $allocated bytes")
+        assertTrue(sink > 0)
+    }
+
+    @Test
+    fun packedDiffMaskAndWireValidationWorkIncludingEnumsAndNesting() {
+        assertEquals(PackedParticle_BITS, PackedParticle.BITS)
+        val p1 = Particle(Material.WATER, 10, false, -5, true).pack()
+        val p2 = p1.withVariation(20).withActive(false)
+        assertEquals(0, p1.diffMask(p1))
+        // Fields: 0=material, 1=variation, 2=moved, 3=velocity, 4=active
+        assertEquals((1 shl 1) or (1 shl 4), p1.diffMask(p2))
+        assertEquals(p1.diffMask(p2), p2.diffMask(p1))
+
+        // Valid raw long round-trips via isValid / fromRaw / fromRawOrNull.
+        assertTrue(PackedParticle.isValid(p1.raw))
+        assertEquals(p1, PackedParticle.fromRaw(p1.raw))
+        assertEquals(p1, PackedParticle.fromRawOrNull(p1.raw))
+
+        // Stray high bit above 25 bits is rejected.
+        val strayHigh = p1.raw or (1L shl 25)
+        assertFalse(PackedParticle.isValid(strayHigh))
+        assertEquals(null, PackedParticle.fromRawOrNull(strayHigh))
+        assertFailsWith<IllegalArgumentException> { PackedParticle.fromRaw(strayHigh) }
+
+        // Out-of-range enum ordinal (Material has 5 entries -> valid 0..4, code 5..7 invalid).
+        val badEnum = (p1.raw and 7L.inv()) or 5L
+        assertFalse(PackedParticle.isValid(badEnum))
+        assertFailsWith<IllegalArgumentException> { PackedParticle.fromRaw(badEnum) }
+
+        // Nullable enum: Material? has 5 entries -> codes 0 (null) and 1..5 valid, 6..7 invalid.
+        val validOpt = OptionalMaterial(Material.FIRE, null, true).pack()
+        assertTrue(PackedOptionalMaterial.isValid(validOpt.raw))
+        val badOptEnum = (validOpt.raw and 7L.inv()) or 6L
+        assertFalse(PackedOptionalMaterial.isValid(badOptEnum))
+
+        // Recursive validation on nested @Bitpack Cell(particle, spare, visible).
+        val cell = Cell(particle, Position(-10, 10), true).pack()
+        assertTrue(PackedCell.isValid(cell.raw))
+        // Corrupt the nested particle's material ordinal (bits 0..2 = 7).
+        val corruptNestedEnum = (cell.raw and 7L.inv()) or 7L
+        assertFalse(PackedCell.isValid(corruptNestedEnum))
+        // Corrupt a stray bit inside the 4 reserved padding bits of `spare` (offset 25, inner width 20 -> bit 45).
+        val corruptNestedSpare = cell.raw or (1L shl 45)
+        assertFalse(PackedCell.isValid(corruptNestedSpare))
+
+        // Zero-allocation check for PackedParticle.diffMask and PackedParticle.isValid.
+        val bean = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
+        val id = Thread.currentThread().threadId()
+        var sink = 0
+        repeat(20_000) {
+            if (PackedParticle.isValid(p1.raw)) sink += p1.diffMask(p2)
+        }
+        val before = bean.getThreadAllocatedBytes(id)
+        repeat(1_000_000) {
+            if (PackedParticle.isValid(p1.raw)) sink += p1.diffMask(p2)
+        }
+        val allocated = bean.getThreadAllocatedBytes(id) - before
+        assertTrue(allocated < 4096, "allocated $allocated bytes")
+        assertTrue(sink > 0)
+    }
+
+    @Test
     fun generatedCodeUsesNoReflection() {
         val classes = listOf(
             Class.forName("dev.omakasekim.boron.sample.AccountStateDiffKt"),

@@ -3,10 +3,12 @@ package dev.omakasekim.boron
 /**
  * Generates a comparison that reports which properties of two instances differ, as a bit mask.
  *
- * For a class `Account` this generates `Account.diffMask(other)`, an `AccountDiff` object holding
- * one constant per property, and, for data classes, `Account.applyDiff(other, mask)`.
+ * For a class `Account` this generates `Account.diffMask(other)`, `Account.changed(other)`, an
+ * `AccountDiff` object holding one constant per property plus `ALL`, `count`, `has`, `hasAny`,
+ * `hasAll`, zero-allocation inline `forEach`, and `names`, and, for data classes,
+ * `Account.applyDiff(other, mask)`.
  *
- * Generated code uses no reflection and allocates nothing in `diffMask`.
+ * Generated code uses no reflection and allocates nothing in `diffMask`, `changed`, or `forEach`.
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)
@@ -16,8 +18,10 @@ public annotation class FastDiff
  * Generates a value class that stores the annotated class's properties packed into one `Long`.
  *
  * For a class `Flags` this generates `PackedFlags`, with a getter and a `with` function per
- * property, plus `Flags.pack()` and `PackedFlags.unpack()`. A `PackedFlags` is a plain `long` at
- * run time, so arrays of them need no objects.
+ * property, zero-allocation `diffMask(other)` directly over packed bits, `Companion.BITS`,
+ * `isValid(raw)`, `fromRaw(raw)`, `fromRawOrNull(raw)`, plus `Flags.pack()` and
+ * `PackedFlags.unpack()`. A `PackedFlags` is a plain `long` at run time, so arrays of them need
+ * no objects.
  *
  * Supported property types are `Boolean`, `Byte`, `Short`, `Int`, `Long`, `Char`, `UByte`,
  * `UShort`, `UInt`, `ULong`, `Float`, `Double`, enum classes (which may be nullable), and other

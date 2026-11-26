@@ -22,6 +22,8 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation(project(":annotations"))
     testImplementation("dev.zacsweers.kctfork:ksp:0.14.0")
+    testRuntimeOnly("com.google.devtools.ksp:symbol-processing-aa-embeddable:2.3.14")
+    testRuntimeOnly("com.google.devtools.ksp:symbol-processing-common-deps:2.3.14")
 }
 
 tasks.test {

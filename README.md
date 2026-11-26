@@ -35,12 +35,12 @@ val cells = LongArray(1 shl 20)                 // a million particles, no objec
 ```kotlin
 plugins {
     kotlin("jvm") version "2.4.21"
-    id("com.google.devtools.ksp") version "2.3.13"
+    id("com.google.devtools.ksp") version "2.3.14"
 }
 
 dependencies {
-    implementation("dev.omakasekim.boron:boron-annotations:0.2.0")
-    ksp("dev.omakasekim.boron:boron-processor:0.2.0")
+    implementation("dev.omakasekim.boron:boron-annotations:0.3.0")
+    ksp("dev.omakasekim.boron:boron-processor:0.3.0")
 }
 ```
 
@@ -52,9 +52,10 @@ For `@FastDiff class Foo`:
 
 | Generated | Purpose |
 | --- | --- |
-| `Foo.diffMask(other)` | A mask with one bit per differing property. `Int` up to 32 properties, `Long` up to 64. |
-| `FooDiff.PROPERTY_NAME` | A constant for each property's bit, plus `ALL`. |
-| `FooDiff.names(mask)` | Property names, for logging. This one allocates. |
+| `Foo.diffMask(other)` / `Foo.changed(other)` | A mask with one bit per differing property (`Int` up to 32, `Long` up to 64) and a fast boolean check. |
+| `FooDiff.PROPERTY_NAME`, `ALL` | A constant for each property's bit, plus `ALL`. |
+| `FooDiff.count` / `has` / `hasAny` / `hasAll` / `forEach` | Zero-allocation count, flag checks, and `inline` iteration over changed property names. |
+| `FooDiff.names(mask)` | Property names as a `List<String>`, for logging. This one allocates. |
 | `Foo.applyDiff(other, mask)` | Data classes only: a copy holding `other`'s value for each set bit. |
 
 `@DiffIgnore` leaves a property out. Nested classes flatten their names, so `Outer.Inner` generates
@@ -66,8 +67,10 @@ For `@Bitpack class Foo`:
 | --- | --- |
 | `PackedFoo(raw: Long)` | A `@JvmInline value class`, with one getter per property. |
 | `PackedFoo.withProperty(value)` | A copy with one field replaced. |
+| `PackedFoo.diffMask(other)` | Zero-allocation bitwise field diff directly on packed `Long`s without unpacking. |
+| `PackedFoo.isValid(raw)` / `fromRaw(raw)` / `fromRawOrNull(raw)` | Wire-safe validation of unused high bits, enum ordinals (nullable or not), and nested `@Bitpack` fields. |
 | `Foo.pack()` and `PackedFoo.unpack()` | Conversion in both directions. |
-| `PackedFoo_BITS` | How many of the 64 bits the layout uses. |
+| `PackedFoo_BITS` / `PackedFoo.BITS` | How many of the 64 bits the layout uses. |
 
 Fields are laid out in declaration order from bit 0. Supported types are `Boolean`, `Byte`, `Short`, `Int`,
 `Long`, `Char`, `UByte`, `UShort`, `UInt`, `ULong`, `Float`, `Double`, enum classes (nullable or not) and

@@ -3,6 +3,21 @@
 Versions follow this rule: a bug or security fix increments `0.0.X`, and new functionality
 or new platform support increments `0.X.0`.
 
+## [0.3.0] - 2026-11-26
+
+### Added
+
+- `@FastDiff` now generates zero-allocation mask helpers: `Foo.changed(other)`, `FooDiff.count(mask)`,
+  `FooDiff.has(mask, flag)`, `FooDiff.hasAny(mask, flags)`, `FooDiff.hasAll(mask, flags)`, and an
+  `inline fun FooDiff.forEach(mask, action)` for allocation-free iteration over changed property names.
+- `@Bitpack` now generates zero-allocation bitwise diffing directly on packed values via
+  `PackedFoo.diffMask(other)` (using a single `xor` fast path without unpacking objects).
+- `@Bitpack` now generates a `Companion` on `PackedFoo` with `BITS`, wire-safe zero-allocation
+  `isValid(raw)` (verifying unused high bits, non-nullable and nullable enum bounds, and recursively
+  validating nested `@Bitpack` fields), `fromRaw(raw)`, and `fromRawOrNull(raw)`.
+- Upgraded KSP to `2.3.14`, Gradle wrapper to `9.9.2`, `actions/setup-java` to `6.3.0`, added Korean
+  documentation (`README.ko.md`), and enabled automatic `main` push and pull-request CI triggers.
+
 ## [0.2.0] - 2026-11-20
 
 ### Added
